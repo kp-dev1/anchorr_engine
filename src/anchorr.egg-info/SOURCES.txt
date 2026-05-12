@@ -1,0 +1,6 @@
+README.md
+pyproject.toml
+src/anchorr.egg-info/PKG-INFO
+src/anchorr.egg-info/SOURCES.txt
+src/anchorr.egg-info/dependency_links.txt
+src/anchorr.egg-info/top_level.txt

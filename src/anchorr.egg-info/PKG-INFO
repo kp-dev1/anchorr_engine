@@ -1,0 +1,77 @@
+Metadata-Version: 2.4
+Name: anchorr
+Version: 0.1.0
+Summary: High-performance Rust-backed video encoding and batch processing engine
+License: MIT
+Keywords: video,ffmpeg,rust,encoding,scene,batch
+Classifier: Programming Language :: Rust
+Classifier: Programming Language :: Python :: 3
+Classifier: Topic :: Multimedia :: Video
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+
+# ⚓ anchorr-engine
+
+A high-performance Rust-backed video processing engine for Python. Built to handle heavy-duty FFmpeg tasks with parallel execution and Scene-compliant defaults.
+
+## Features
+- **Parallel Processing**: Uses Rust/Rayon to run batch encodes concurrently across all CPU threads.
+- **Scene Compliance**: Automates Mod-16 scaling, metadata stripping, and 10-bit HEVC profiles.
+- **Smart Crop**: Integrated `cropdetect` logic to automatically identify and strip black bars.
+- **Low Overhead**: Direct binding via PyO3—no shell overhead for metadata extraction.
+
+## Prerequisites
+You must have `ffmpeg` and `ffprobe` installed and available in your system PATH.
+
+## Installation
+```bash
+uv pip install anchorr_engine
+```
+
+## Quick Start
+
+### 1. Probe Metadata
+```python
+from anchorr import AnchEngine
+
+anch = AnchEngine()
+info = anch.probe("video.mkv")
+print(f"{info.width}x{info.height} using {info.codec}")
+```
+
+### 2. Auto-Crop & Encode
+```python
+# Detect black bars automatically
+coords = anch.get_blackbar_coords("input.mkv")
+
+# Encode to HEVC 10-bit (mod-16 compliant)
+anch.transform(
+    input="input.mkv",
+    output="output.mkv",
+    codec="libx265",
+    res="1080",
+    crop=coords,
+    flags="-crf 18 --preset slow"
+)
+```
+
+### 3. Batch Encode
+```python
+# List of (input, output, codec, resolution, crop, flags)
+tasks = [
+    ("v1.mkv", "v1_out.mkv", "libx265", "1080", "1920:800:0:140", ""),
+    ("v2.mkv", "v2_out.mkv", "libx265", "1080", "1920:1080:0:0", "")
+]
+
+# Runs all encodes in parallel
+results = anch.batch(tasks)
+```
+
+## Development
+To build from source:
+1. Install Rust/Cargo.
+2. Run `uv run maturin develop` to compile the Rust extension into your local Python environment.
+
+## License
+MIT
+

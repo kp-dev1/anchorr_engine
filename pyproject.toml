@@ -1,0 +1,21 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "anchorr"
+version = "0.1.0"
+description = "High-performance Rust-backed video encoding and batch processing engine"
+license = "MIT"
+requires-python = ">=3.8"
+dependencies = []
+readme = "README.md"
+keywords = ["video", "ffmpeg", "rust", "encoding", "scene", "batch"]
+classifiers = [
+  "Programming Language :: Rust",
+  "Programming Language :: Python :: 3",
+  "Topic :: Multimedia :: Video",
+]
+
+[tool.maturin]
+features = ["pyo3/extension-module"]

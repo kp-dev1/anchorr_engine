@@ -1,0 +1,10 @@
+target/
+.venv/
+__pycache__/
+*.so
+*.whl
+*.mkv
+*.vpy
+.python-version
+uv.lock
+Cargo.lock
