@@ -1,6 +1,7 @@
 use pyo3::prelude::*;
 use std::process::{Command, Stdio};
 use std::io::{Write, BufRead, BufReader};
+use std::collections::HashMap;
 use serde_json::Value;
 use rayon::prelude::*;
 
@@ -50,18 +51,28 @@ impl AnchEngine {
 
     fn get_blackbar_coords(&self, path: String) -> PyResult<String> {
         let meta = self.probe(path.clone())?;
+        
+        let seek_seconds = meta.duration * 0.25;
+        let seek_time = format!("{:.3}", seek_seconds);
+
         let output = Command::new("ffmpeg")
-            .args(["-hide_banner", "-loglevel", "info", "-i", &path, "-vf", "cropdetect=24:16:0", "-vframes", "100", "-f", "null", "-"])
+            .args(["-hide_banner", "-loglevel", "info", "-ss", &seek_time, "-i", &path, "-vf", "cropdetect=24:16:0", "-vframes", "100", "-f", "null", "-"])
             .output()
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyIOError, _>(e.to_string()))?;
 
         let stderr = String::from_utf8_lossy(&output.stderr);
-        let coords = stderr.lines()
-            .filter(|l| l.contains("crop="))
-            .last()
-            .and_then(|l| l.split("crop=").last())
-            .map(|s| s.trim().to_string())
+        let mut counts = HashMap::new();
+        for line in stderr.lines().filter(|l| l.contains("crop=")) {
+            if let Some(c) = line.split("crop=").last() {
+                *counts.entry(c.trim().to_string()).or_insert(0) += 1;
+            }
+        }
+
+        let coords = counts.into_iter()
+            .max_by_key(|&(_, count)| count)
+            .map(|(val, _)| val)
             .unwrap_or_else(|| format!("{}:{}:0:0", meta.width, meta.height));
+            
         Ok(coords)
     }
 
@@ -72,7 +83,10 @@ impl AnchEngine {
         ffmpeg.args(["-map", "0", "-map_metadata", "-1", "-map_chapters", "0"]);
 
         let clean_crop = crop.replace("crop=", "");
-        let filter_chain = format!("crop={},scale=w='trunc(oh*a/16)*16':h={}:flags=lanczos,setsar=1", clean_crop, res);
+        let filter_chain = format!(
+            "crop={},scale=w='trunc(oh*a/16)*16':h='trunc({}/16)*16':flags=lanczos,setsar=1", 
+            clean_crop, res
+        );
         ffmpeg.arg("-vf").arg(filter_chain);
 
         ffmpeg.args(["-vsync", "cfr", "-fps_mode", "cfr"]); 
@@ -81,7 +95,7 @@ impl AnchEngine {
         if codec.contains("x265") || codec.contains("hevc") {
             ffmpeg.args(["-pix_fmt", "yuv420p10le", "-profile:v", "main10"]);
             if !flags.contains("x265-params") {
-                ffmpeg.args(["-x265-params", "aq-mode=3:strong-intra-smoothing=0:sao=0"]);
+                ffmpeg.args(["-x265-params", "aq-mode=3:strong-intra-smoothing=0:sao=0:deblock=-3,-3:rc-lookahead=60"]);
             }
         } else if codec.contains("x264") {
             ffmpeg.args(["-pix_fmt", "yuv420p", "-profile:v", "high", "-level", "4.1"]);
@@ -94,9 +108,6 @@ impl AnchEngine {
         }
         
         ffmpeg.arg(&output).stderr(Stdio::piped());
-
-        let args: Vec<String> = ffmpeg.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
-        println!("\n  > [DEBUG] CMD: ffmpeg {}", args.join(" "));
 
         let mut child = ffmpeg.spawn().map_err(|e| PyErr::new::<pyo3::exceptions::PyIOError, _>(e.to_string()))?;
 
@@ -111,11 +122,6 @@ impl AnchEngine {
         }
 
         let status = child.wait().map_err(|e| PyErr::new::<pyo3::exceptions::PyIOError, _>(e.to_string()))?;
-        
-        if !status.success() {
-            println!("\n  > [⚓ ANCHORR] FFmpeg exited with an error.");
-        }
-        
         Ok(status.success())
     }
 
@@ -139,4 +145,3 @@ fn anchorr(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<VideoMetadata>()?;
     Ok(())
 }
-
